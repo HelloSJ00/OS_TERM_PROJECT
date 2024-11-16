@@ -10,10 +10,10 @@
 #include <cstdlib>
 #include <ctime>
 #include <csignal>  // kill 함수 사용을 위한 헤더 파일
-#include "class/FeedbackQueue.cpp"
-#include "class/PCB.h"
-#include "class/User.h"
-#include "class/Scheduler.cpp"
+#include "class/RUNQUEUE/FeedbackQueue.h"
+#include "class/PCB/PCB.h"
+#include "class/USER/User.h"
+#include "class/SCHEDULER/Scheduler.h"
 
 #define NUM_OF_PROCESSES 10
 #define MIN_EXECUTION_TIME 60000  // 최소 실행 시간 (60초)

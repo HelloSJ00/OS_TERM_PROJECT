@@ -1,5 +1,8 @@
 #define TIME_TICK 10000; //10ms
-#define IPC_KEY 1234 // IPC 메시지 큐 키
+// IPC 키 설정
+#define IPC_KEY_TO_CPU 1234
+#define IPC_KEY_TO_IODEVICE 3456
+#define IPC_KEY_TO_SCHEDULER 5678
 
 #include "Scheduler.h"
 #include "IPCMessage.h"
@@ -60,47 +63,74 @@ PCB* Scheduler::get_pcb_by_pid(int pid) {
 
 // Tick 처리
 void Scheduler::tick() {
-    cpu.tick();  // CPU의 현재 프로세스 타임 슬라이스 감소
+    int msgid_to_cpu = msgget(IPC_KEY_TO_CPU, 0666 | IPC_CREAT);
+    int msgid_to_iodevice = msgget(IPC_KEY_TO_IODEVICE, 0666 | IPC_CREAT);
+    int msgid_to_scheduler = msgget(IPC_KEY_TO_SCHEDULER, 0666 | IPC_CREAT);
 
-    // 메시지 큐에서 메시지 수신
-    int msgid = msgget(IPC_KEY, 0666 | IPC_CREAT);
-    if (msgid == -1) {
+    if (msgid_to_cpu == -1 || msgid_to_iodevice == -1 || msgid_to_scheduler == -1) {
         perror("msgget");
         return;
     }
 
-    IPCMessage msg;
-    while (msgrcv(msgid, &msg, sizeof(msg) - sizeof(long), 0, IPC_NOWAIT) != -1) {
-        // 메시지 처리
-        PCB* pcb = get_pcb_by_pid(msg.pid);
+    // CPU로 메시지 전송
+    if (!cpu.is_idle()) {
+        IPCMessageToCPU msg;
+        msg.mtype = 1;
+        msg.pid = cpu.release_process()->pid;
+
+        if (msgsnd(msgid_to_cpu, &msg, sizeof(msg) - sizeof(long), 0) == -1) {
+            perror("msgsnd to CPU");
+            return;
+        }
+
+        cout << "Scheduler: Sent tick message to CPU for process " << msg.pid << ".\n";
+    }
+
+    // IODevice로 메시지 전송
+    if (!ioDevice.is_idle()) {
+        IPCMessageToIODevice msg;
+        msg.mtype = 1;
+        msg.pid = ioDevice.release_process()->pid;
+
+        if (msgsnd(msgid_to_iodevice, &msg, sizeof(msg) - sizeof(long), 0) == -1) {
+            perror("msgsnd to IODevice");
+            return;
+        }
+
+        cout << "Scheduler: Sent tick message to IODevice for process " << msg.pid << ".\n";
+    }
+
+    // CPU의 응답 메시지 처리
+    IPCMessageToScheduler response;
+    while (msgrcv(msgid_to_scheduler, &response, sizeof(response) - sizeof(long), 1, IPC_NOWAIT) != -1) {
+        PCB* pcb = get_pcb_by_pid(response.pid);
+
         if (!pcb) {
-            cerr << "Scheduler: PCB not found for PID " << msg.pid << endl;
+            cerr << "Scheduler: PCB not found for PID " << response.pid << ".\n";
             continue;
         }
 
-        pcb->cpu_burst = msg.cpu_burst;
-        pcb->io_burst = msg.io_burst;
+        pcb->cpu_burst = response.cpu_burst;
+        pcb->io_burst = response.io_burst;
 
         if (pcb->cpu_burst == 0 && pcb->io_burst > 0) {
-            // IO 작업 대기로 WaitQueue로 이동
-            waitQueue.enqueue(pcb);
+            waitQueue.enqueue(pcb);  // IO 대기
             pcb->state = WAITING;
-            cout << "Scheduler: Process " << msg.pid << " moved to WaitQueue.\n";
+            cout << "Scheduler: Process " << response.pid << " moved to WaitQueue.\n";
         } else if (pcb->cpu_burst == 0 && pcb->io_burst == 0) {
-            // 프로세스 종료
-            pcb->state = TERMINATED;
-            cout << "Scheduler: Process " << msg.pid << " terminated.\n";
-        } else if (pcb->cpu_burst > 0) {
-            // FeedbackQueue로 재삽입
-            demoteProcess(pcb);
+            pcb->state = TERMINATED;  // 프로세스 종료
+            cout << "Scheduler: Process " << response.pid << " terminated.\n";
+        } else if (response.io_complete) {
+            feedbackQueues[0].enqueue(pcb);  // IO 완료 후 FeedbackQueue로 이동
+            pcb->state = READY;
+            cout << "Scheduler: Process " << response.pid << " moved to FeedbackQueue 0 (IO complete).\n";
+        } else {
+            demoteProcess(pcb);  // FeedbackQueue로 재삽입
         }
     }
-
-    // 다음 프로세스 스케줄링
-    if (cpu.is_idle()) {
-        schedule();
-    }
 }
+
+
 
 // 타이머 핸들러
 void Scheduler::timer_handler(int signum) {

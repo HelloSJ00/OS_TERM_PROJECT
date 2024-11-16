@@ -3,10 +3,10 @@
 
 #include <queue>
 #include "PCB.h"
-
+using namespace std;
 class WaitQueue {
 private:
-    std::queue<PCB*> queue;  // PCB 포인터를 저장하는 큐
+    queue<PCB*> queue;  // PCB 포인터를 저장하는 큐
 
 public:
     // 프로세스를 큐에 추가
