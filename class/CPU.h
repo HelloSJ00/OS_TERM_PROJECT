@@ -22,6 +22,8 @@ public:
 
   // CPU가 비어 있는지 확인
   bool is_idle() const;
+
+  int getTimeSlice();
 };
 
 #endif  // CPU_H

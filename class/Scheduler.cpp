@@ -1,5 +1,10 @@
 #define TIME_TICK 10000; //10ms
+#define IPC_KEY 1234 // IPC 메시지 큐 키
+
 #include "Scheduler.h"
+#include "IPCMessage.h"
+#include <sys/ipc.h>
+#include <sys/msg.h>
 using namespace std;
 // 생성자
 Scheduler::Scheduler() : feedbackQueues({
@@ -57,21 +62,43 @@ PCB* Scheduler::get_pcb_by_pid(int pid) {
 void Scheduler::tick() {
     cpu.tick();  // CPU의 현재 프로세스 타임 슬라이스 감소
 
-    if (cpu.time_slice <= 0 && !cpu.is_idle()) {
-        User* finished_user = cpu.release_process();
-        PCB* finished_pcb = &(finished_user->pcb);
+    // 메시지 큐에서 메시지 수신
+    int msgid = msgget(IPC_KEY, 0666 | IPC_CREAT);
+    if (msgid == -1) {
+        perror("msgget");
+        return;
+    }
 
-        if (finished_pcb) {
-            if (finished_pcb->cpu_burst <= 0) {
-                cout << "Process " << finished_pcb->pid << " completed its execution.\n";
-                finished_pcb->state = TERMINATED;
-            } else {
-                finished_pcb->state = READY;
-                demoteProcess(finished_pcb);
-            }
+    IPCMessage msg;
+    while (msgrcv(msgid, &msg, sizeof(msg) - sizeof(long), 0, IPC_NOWAIT) != -1) {
+        // 메시지 처리
+        PCB* pcb = get_pcb_by_pid(msg.pid);
+        if (!pcb) {
+            cerr << "Scheduler: PCB not found for PID " << msg.pid << endl;
+            continue;
         }
 
-        schedule();  // 다음 프로세스 스케줄링
+        pcb->cpu_burst = msg.cpu_burst;
+        pcb->io_burst = msg.io_burst;
+
+        if (pcb->cpu_burst == 0 && pcb->io_burst > 0) {
+            // IO 작업 대기로 WaitQueue로 이동
+            waitQueue.enqueue(pcb);
+            pcb->state = WAITING;
+            cout << "Scheduler: Process " << msg.pid << " moved to WaitQueue.\n";
+        } else if (pcb->cpu_burst == 0 && pcb->io_burst == 0) {
+            // 프로세스 종료
+            pcb->state = TERMINATED;
+            cout << "Scheduler: Process " << msg.pid << " terminated.\n";
+        } else if (pcb->cpu_burst > 0) {
+            // FeedbackQueue로 재삽입
+            demoteProcess(pcb);
+        }
+    }
+
+    // 다음 프로세스 스케줄링
+    if (cpu.is_idle()) {
+        schedule();
     }
 }
 

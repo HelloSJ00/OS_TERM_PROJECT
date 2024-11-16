@@ -16,21 +16,29 @@ void IOdevice::assign_process(User* user, int slice) {
 
 // CPU 사이클을 처리하고 타임 슬라이스 확인
 void IOdevice::tick() {
-  if (current_user != nullptr) {
-    // time_slice에서 TIME_TICK을 차감
-    time_slice -= TIME_TICK;
+    if (current_user != nullptr) {
+        // time_slice에서 TIME_TICK을 차감
+        time_slice -= TIME_TICK;
 
-    // time_slice가 0보다 작으면 0으로 설정
-    if (time_slice < 0) {
-        time_slice = 0;
-    }
+        // User의 io_burst에서 TIME_TICK을 차감
+        current_user->io_burst -= TIME_TICK;
 
-    // time_slice가 0이면 프로세스 해제
-    if (time_slice == 0) {
-        cout << "CPU: Time slice expired for process " << current_user->pid << "\n";
-        current_user = nullptr;  // 프로세스 해제
+        // io_burst가 0보다 작으면 0으로 설정
+        if (current_user->io_burst < 0) {
+            current_user->io_burst = 0;
+        }
+
+        // time_slice가 0보다 작으면 0으로 설정
+        if (time_slice < 0) {
+            time_slice = 0;
+        }
+
+        // 현재 상태 출력
+        cout << "CPU: Process " << current_user->pid 
+            << " time_slice=" << time_slice 
+            << ", cpu_burst=" << current_user->cpu_burst 
+            << "ms, io_burst=" << current_user->io_burst << "ms remaining.\n";
     }
-  }
 }
 
 // 현재 프로세스를 반환하고 CPU를 비웁니다.
