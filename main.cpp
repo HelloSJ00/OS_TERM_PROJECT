@@ -2,48 +2,53 @@
 #include <queue>
 #include <unistd.h>
 #include <sys/wait.h>
-#include <sys/ipc.h>
-#include <sys/msg.h>
-#include <csignal>    // signal, SIGALRM
-#include <sys/time.h> // setitimer
 #include <vector>
 #include <cstdlib>
 #include <ctime>
 #include <csignal>  // kill 함수 사용을 위한 헤더 파일
-#include "class/RUNQUEUE/FeedbackQueue.h"
-#include "class/PCB/PCB.h"
-#include "class/USER/User.h"
-#include "class/SCHEDULER/Scheduler.h"
+#include "./class/RUNQUEUE/FeedbackQueue.h"
+#include "./class/PCB/PCB.h"
+#include "./class/USER/User.h"
+#include "./class/SCHEDULER/Scheduler.h"
+#include "./class/CPU/CPU.h"
+#include "./class/IODEVICE/IOdevice.h"
+#include "./class/WAITQUEUE/WaitQueue.h"
 
-#define NUM_OF_PROCESSES 10
+#define NUM_OF_PROCESSES 10 
 #define MIN_EXECUTION_TIME 60000  // 최소 실행 시간 (60초)
+#define TIME_TICK 10 // 10ms
 using namespace std;
 
 int main(){
-  Scheduler Round_Robin_Scheduler;
-
+  FeedbackQueue* fq1 = new FeedbackQueue(50);
+  FeedbackQueue* fq2 = new FeedbackQueue(100);
+  FeedbackQueue* fq3 = new FeedbackQueue(200);
+  vector<FeedbackQueue*> feedbackQueues = {fq1, fq2, fq3};
+  WaitQueue* waitQueue = new WaitQueue();
+  CPU* cpu = new CPU();
+  IOdevice* ioDevice = new IOdevice();
+  Scheduler scheduler(feedbackQueues, waitQueue, cpu, ioDevice);
+  vector<pid_t> child_pids;
   srand(time(0)); // 랜덤 시드 설정
 
   // 자식 프로세스 10개 생성
-  for (int i = 0; i < NUM_OF_PROCESSES; i++) {
-    pid_t pid = fork();
-    if (pid == 0) {
-        pause();  // 자식 프로세스는 대기
-    } else if (pid > 0) {
-        int cpu_burst, io_burst;
-
-        // 최소 실행 시간을 보장하도록 CPU와 IO burst 생성
-        do {
-            cpu_burst = rand() % 50000 + 10000;  // 10초 ~ 60초
-            io_burst = rand() % 20000 + 10000;  // 10초 ~ 30초
-        } while (cpu_burst + io_burst < MIN_EXECUTION_TIME);
-            User* user = new User(pid, cpu_burst, io_burst);
-        // 스케줄러에 User의 PCB 포인터 추가
-        Round_Robin_Scheduler.addProcess(&(user->pcb));
-        cout << "Created process " << pid << " with CPU burst " << cpu_burst << "ms and IO burst " << io_burst << "ms\n";
+  for (int i = 0; i < NUM_OF_PROCESSES; ++i) {
+    pid_t pid = fork(); // 자식 프로세스 생성
+    int cpu_burst = (rand() % 1501 + 3000) * TIME_TICK; // 30초 ~ 45초
+    int io_burst = (rand() % 1501 + 3000) * TIME_TICK;  // 30초 ~ 45초
+    if (pid == 0) { // 자식 프로세스
+      cout << "Child Process Created: PID = " << getpid()
+            << ", CPU Burst = " << cpu_burst
+            << ", IO Burst = " << io_burst << std::endl;
+      User user(getpid(), cpu_burst, io_burst); // User 객체 생성
+      user.receiveCommand();                  // 명령 수신 대기
+      exit(0);                                // 자식 프로세스 종료
+    } else if (pid > 0) { // 부모 프로세스
+        PCB* pcb = new PCB(pid, cpu_burst, io_burst, nullptr); // PCB 생성
+        scheduler.addProcess(pcb); // FeedbackQueue에 PCB 추가
     } else {
-        cerr << "Fork failed\n";
-        exit(1);
+      cerr << "Fork failed.\n";
+      return 1;
     }
   }
 
@@ -53,5 +58,13 @@ int main(){
   }
 
   cout << "All child processes have completed.\n";
-  return 0; 
+
+  // 작업 수행 후 메모리 해제
+  delete fq1;
+  delete fq2;
+  delete fq3;
+  delete waitQueue;
+  delete cpu;
+  delete ioDevice;
+  return 0;
 }

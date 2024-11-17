@@ -1,136 +1,91 @@
 #define TIME_TICK 10000; //10ms
 // IPC 키 설정
-#define IPC_KEY_TO_CPU 1234
-#define IPC_KEY_TO_IODEVICE 3456
+#define IPC_KEY_TO_USER 1234
 #define IPC_KEY_TO_SCHEDULER 5678
+#define CPU_REPORT 0
+#define IO_REPORT 1
+#define CPU_DECREASE 2
+#define IO_DECREASE 3
+#define TERMINATE 4
 
-#include "Scheduler.h"
-#include "IPCMessage.h"
+#include "./Scheduler.h"
 #include <sys/ipc.h>
 #include <sys/msg.h>
+#include <iostream>
+#include <signal.h>
+#include <sys/time.h>
+#include <unistd.h>
 using namespace std;
+
 // 생성자
-Scheduler::Scheduler() : feedbackQueues({
-    FeedbackQueue(50),
-    FeedbackQueue(100),
-    FeedbackQueue(200)
-}) {
+Scheduler::Scheduler(vector<FeedbackQueue*> feedbackQueues, WaitQueue* waitQueue, CPU* cpu, IOdevice* ioDevice)
+    : feedbackQueues(feedbackQueues), waitQueue(waitQueue), cpu(cpu), ioDevice(ioDevice) {
     start_timer();
 }
 
 // 프로세스 추가
 void Scheduler::addProcess(PCB* process) {
-    feedbackQueues[0].enqueue(process);
+    feedbackQueues[0]->enqueue(process);
     cout << "Process " << process->pid << " added to FeedbackQueue 0\n";
 }
 
 // 스케줄링 메서드
-void Scheduler::schedule() {
-    if (cpu.is_idle()) {
-        for (int i = 0; i < feedbackQueues.size(); ++i) {
-            if (!feedbackQueues[i].isEmpty()) {
-                PCB* pcb = feedbackQueues[i].dequeue();
-                pcb->state = RUNNING;
-                cpu.assign_process(pcb->user, feedbackQueues[i].getTimeQuantum());
-                return;
-            }
+void Scheduler::CPUSchedule() {
+    for (auto queue : feedbackQueues) {
+        if (!queue->isEmpty()) {
+            PCB* pcb = queue->dequeue();
+            pcb->state = RUNNING;
+            cpu->assign_process(pcb, queue->getTimeQuantum());
+            return;
         }
-        cout << "No processes in FeedbackQueues to schedule.\n";
+    }
+    cout << "No processes in FeedbackQueues to schedule.\n";
+}
+
+void Scheduler::IOSchedule(){
+    if(!waitQueue->isEmpty()){
+        PCB* pcb = waitQueue->dequeue();
+        pcb->state = IO;
+        ioDevice->assign_process(pcb,50);
+        return;
     }
 }
 
 // 프로세스 강등
-void Scheduler::demoteProcess(PCB* process) {
+void Scheduler::runQueueEnqueue(PCB* process) {
     int current_level = process->priority;
-    int next_level = std::min(current_level + 1, (int)feedbackQueues.size() - 1);
+    int next_level = min(current_level + 1, (int)feedbackQueues.size() - 1);
 
     process->priority = next_level;
-    feedbackQueues[next_level].enqueue(process);
+    feedbackQueues[next_level]->enqueue(process);
     process->state = READY;
     cout << "Process " << process->pid << " demoted to FeedbackQueue " << next_level << "\n";
 }
 
-// PID로 PCB 찾기
-PCB* Scheduler::get_pcb_by_pid(int pid) {
-    for (auto& queue : feedbackQueues) {
-        PCB* process = queue.find_process_by_pid(pid);
-        if (process != nullptr) {
-            return process;
-        }
-    }
-    return nullptr;
+void Scheduler::waitQueueEnqueue(PCB* process) {
+    process->state = WAITING;  // 상태를 WAITING으로 설정
+    waitQueue->enqueue(process);  // WAITING 큐에 삽입
+    cout << "Process " << process->pid << " moved to WAITING queue.\n";
 }
 
-// Tick 처리
-void Scheduler::tick() {
-    int msgid_to_cpu = msgget(IPC_KEY_TO_CPU, 0666 | IPC_CREAT);
-    int msgid_to_iodevice = msgget(IPC_KEY_TO_IODEVICE, 0666 | IPC_CREAT);
-    int msgid_to_scheduler = msgget(IPC_KEY_TO_SCHEDULER, 0666 | IPC_CREAT);
+// 프로세스 종료 처리
+void Scheduler::terminateProcess(PCB* process) {
+    cout << "Scheduler: Terminating process " << process->pid << "\n";
 
-    if (msgid_to_cpu == -1 || msgid_to_iodevice == -1 || msgid_to_scheduler == -1) {
-        perror("msgget");
-        return;
+    // IPC 메시지를 통해 User 프로세스 종료 명령 전송
+    int msgid_to_user = msgget(IPC_KEY_TO_USER, 0666 | IPC_CREAT);
+
+    IPCMessageToUser msg_to_user;
+    msg_to_user.mtype = TERMINATE;
+    msg_to_user.sender_pid = getpid();
+    msg_to_user.receiver_pid = process->pid;
+    if (msgsnd(msgid_to_user, &msg_to_user, sizeof(msg_to_user) - sizeof(long), 0) == -1) {
+        cerr << "Scheduler: Failed to send TERMINATE command to PID " << process->pid << "\n";
     }
 
-    // CPU로 메시지 전송
-    if (!cpu.is_idle()) {
-        IPCMessageToCPU msg;
-        msg.mtype = 1;
-        msg.pid = cpu.release_process()->pid;
-
-        if (msgsnd(msgid_to_cpu, &msg, sizeof(msg) - sizeof(long), 0) == -1) {
-            perror("msgsnd to CPU");
-            return;
-        }
-
-        cout << "Scheduler: Sent tick message to CPU for process " << msg.pid << ".\n";
-    }
-
-    // IODevice로 메시지 전송
-    if (!ioDevice.is_idle()) {
-        IPCMessageToIODevice msg;
-        msg.mtype = 1;
-        msg.pid = ioDevice.release_process()->pid;
-
-        if (msgsnd(msgid_to_iodevice, &msg, sizeof(msg) - sizeof(long), 0) == -1) {
-            perror("msgsnd to IODevice");
-            return;
-        }
-
-        cout << "Scheduler: Sent tick message to IODevice for process " << msg.pid << ".\n";
-    }
-
-    // CPU의 응답 메시지 처리
-    IPCMessageToScheduler response;
-    while (msgrcv(msgid_to_scheduler, &response, sizeof(response) - sizeof(long), 1, IPC_NOWAIT) != -1) {
-        PCB* pcb = get_pcb_by_pid(response.pid);
-
-        if (!pcb) {
-            cerr << "Scheduler: PCB not found for PID " << response.pid << ".\n";
-            continue;
-        }
-
-        pcb->cpu_burst = response.cpu_burst;
-        pcb->io_burst = response.io_burst;
-
-        if (pcb->cpu_burst == 0 && pcb->io_burst > 0) {
-            waitQueue.enqueue(pcb);  // IO 대기
-            pcb->state = WAITING;
-            cout << "Scheduler: Process " << response.pid << " moved to WaitQueue.\n";
-        } else if (pcb->cpu_burst == 0 && pcb->io_burst == 0) {
-            pcb->state = TERMINATED;  // 프로세스 종료
-            cout << "Scheduler: Process " << response.pid << " terminated.\n";
-        } else if (response.io_complete) {
-            feedbackQueues[0].enqueue(pcb);  // IO 완료 후 FeedbackQueue로 이동
-            pcb->state = READY;
-            cout << "Scheduler: Process " << response.pid << " moved to FeedbackQueue 0 (IO complete).\n";
-        } else {
-            demoteProcess(pcb);  // FeedbackQueue로 재삽입
-        }
-    }
+    // PCB 삭제
+    delete process;
 }
-
-
 
 // 타이머 핸들러
 void Scheduler::timer_handler(int signum) {
@@ -146,6 +101,61 @@ void Scheduler::start_timer() {
     timer.it_value.tv_usec = TIME_TICK;  // 10ms
     timer.it_interval = timer.it_value;
     setitimer(ITIMER_REAL, &timer, NULL);
-
     signal(SIGALRM, timer_handler);
+}
+
+void Scheduler::tick() {
+    int msgid_to_scheduler = msgget(IPC_KEY_TO_SCHEDULER, 0666 | IPC_CREAT); // 메시지 큐 ID
+    IPCMessageToScheduler msg_from_user;
+
+    // 메시지 수신 (비차단 모드)
+    if (msgrcv(msgid_to_scheduler, &msg_from_user, sizeof(msg_from_user) - sizeof(long), 0, IPC_NOWAIT) > 0) {
+        // 메시지를 성공적으로 수신한 경우
+        if (msg_from_user.mtype == CPU_REPORT) {
+            cout << "Scheduler: Received CPU completion message from PID " << msg_from_user.pid << "\n";
+
+            // CPU에서 프로세스 해제
+            PCB* process = cpu->release_process();
+            if (process) {
+                process->cpu_burst = msg_from_user.cpu_burst;
+                process->io_burst = msg_from_user.io_burst;
+
+                // 스케줄링 로직
+                if (process->cpu_burst > 0) {
+                    runQueueEnqueue(process);
+                } else if (process->cpu_burst == 0 && process->io_burst > 0) {
+                    waitQueueEnqueue(process);
+                    cout << "Scheduler: Process " << process->pid << " moved to WaitQueue.\n";
+                } else if (process->cpu_burst == 0 && process->io_burst == 0) {
+                    terminateProcess(process);
+                }
+            }
+        } else if (msg_from_user.mtype == IO_REPORT) {
+            cout << "Scheduler: Received IO completion message from PID " << msg_from_user.pid << "\n";
+
+            // I/O 장치에서 프로세스 해제
+            PCB* process = ioDevice->release_process();
+            if (process) {
+                process->cpu_burst = msg_from_user.cpu_burst;
+                process->io_burst = msg_from_user.io_burst;
+                process->state = READY; // 상태를 READY로 변경
+                runQueueEnqueue(process); // 실행 큐로 이동
+                cout << "Scheduler: Process " << process->pid << " moved to RunQueue.\n";
+            }
+        }
+    } else {
+        // 메시지가 없으면 CPU와 IO tick 실행
+        cpu->tick();
+        ioDevice->tick();
+    }
+
+
+    // CPU가 비어있으면 스케줄링
+    if (cpu->is_idle()) {
+        CPUSchedule();
+    }
+
+    if (ioDevice->is_idle()){
+        IOSchedule();
+    }
 }

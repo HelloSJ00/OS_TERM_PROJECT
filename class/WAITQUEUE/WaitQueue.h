@@ -2,7 +2,7 @@
 #define WAITQUEUE_H
 
 #include <queue>
-#include "PCB.h"
+#include "../PCB/PCB.h"
 using namespace std;
 class WaitQueue {
 private:

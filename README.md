@@ -1,67 +1,137 @@
-# 운영체제 Term Project #1 번역
+# OS Term Project #1
 
-**교수님:** 류은석  
-**프로그래밍 과제 #1 마감일:** 2024년 11월 20일 오후 11시 59분 (KST)
+**Prof. Eun-Seok Ryu**
 
-## 프로젝트 1: 간단한 스케줄링
+## Project 1: Simple Scheduling
 
-### 1. 배경: 라운드 로빈 스케줄링
+### Programming Assignment #1
 
-라운드 로빈(Round Robin, RR) 스케줄링 알고리즘은 시분할 시스템을 위해 설계된 선점형 스케줄링 알고리즘입니다. 프로세스는 선입선출(First-Come, First-Served) 순서로 디스패치되지만, 각 프로세스는 제한된 시간 동안만 실행됩니다. 이 시간 간격은 **타임 슬라이스** 또는 **퀀텀**이라 하며, 선점이 추가된 FIFO 스케줄링과 유사합니다.
-
-### 2. CPU 스케줄링에 대한 기본 요구사항
-
-#### 부모 프로세스:
-
-- **10개의 자식 프로세스**를 생성합니다.
-- **라운드 로빈 스케줄링** 정책에 따라 자식 프로세스들을 스케줄링합니다.
-- 타임 퀀텀, 타이머 틱 간격 등은 **임의의 스케줄링 파라미터**를 가정합니다.
-- **타이머 이벤트**를 등록하여 주기적으로 **ALARM 신호**를 받습니다. (`setitimer` 시스템 콜 참고)
-- ALARM 신호는 **주기적인 타이머 인터럽트(타임 틱)** 역할을 합니다.
-- **실행 대기열(run-queue)**과 **대기열(wait-queue)**을 관리합니다.
-  - **실행 대기열(run-queue)**: 준비 상태의 자식 프로세스들을 보관합니다.
-  - **대기열(wait-queue)**: 준비 상태가 아닌 자식 프로세스들을 보관합니다.
-- 자식 프로세스들의 **남은 타임 퀀텀**과 **대기 시간**을 관리합니다.
-- **메시지 큐(msgq)**를 통해 자식 프로세스들에게 **타임 슬라이스**를 제공합니다. (`msgget`, `msgsnd`, `msgrcv` 시스템 콜 및 `IPC_NOWAIT` 플래그 참고)
-
-#### 자식 프로세스:
-
-- **사용자 프로세스의 실행을 시뮬레이션**합니다.
-- **동적 CPU 버스트와 I/O 버스트의 무한 루프**를 통해 작업 부하를 구성합니다.
-- `(cpu_burst, io_burst)` 두 개의 파라미터로 시작하며, 각 값은 **무작위로 생성**됩니다.
-- **CPU 버스트 단계**에서 타임 슬라이스를 받으면 진행하고, **CPU 버스트 값**을 감소시킵니다.
-- CPU 버스트가 끝나면 **I/O 요청**을 부모 프로세스에게 메시지로 보냅니다.
-
-### 3. I/O 관련 선택적 요구사항
-
-#### 자식 프로세스:
-
-- CPU 버스트 후 **I/O 요청**을 수행하며 남은 **CPU 버스트를 관리**합니다.
-- **CPU 버스트가 0이 되면** 다음 **I/O 버스트 시간**을 부모 프로세스에게 메시지로 전달합니다.
-
-#### 부모 프로세스:
-
-- 자식 프로세스로부터 **I/O 요청 메시지**를 받으면 해당 자식을 **실행 대기열에서 대기열로 이동**시킵니다.
-  - 이 자식 프로세스는 I/O가 완료되기 전까지 스케줄링되지 않습니다.
-- **타임 틱마다 대기열에 있는 프로세스들의 I/O 버스트 값을 감소**시킵니다.
-- **I/O 버스트가 0이 되면** 자식 프로세스를 **대기열에서 실행 대기열로 이동**시킵니다.
-- 스케줄링 이벤트 트리거:
-  - **타임 퀀텀 만료**
-  - **I/O 요청 발생**(CPU 버스트 완료 시)
-
-### 4. 프로그램 출력 및 보고서
-
-- 다음 형식으로 스케줄링 작업을 출력합니다:
-  - `(시간 t에, 프로세스 pid가 CPU 시간을 얻음, 남은 CPU 버스트)`
-- **실행 대기열(run-queue) 덤프**와 **대기열(wait-queue) 덤프**를 출력합니다.
-- 모든 작업을 **`schedule_dump.txt`** 파일에 출력합니다.
-- 다음의 C 라이브러리 함수와 시스템 콜을 참고할 수 있습니다:
-  - `sprintf`, `open`, `write`, `close`
-- 모든 프로세스는 **1분 이상 실행**해야 합니다.
-- **0 ~ 10,000 타임 틱** 동안의 스케줄링 작업을 출력합니다.
-- **참고**: C/C++ 프로그래밍 언어를 권장하지만, 이에 제한되지 않습니다.
+**Due Date:** Nov. 20, 2024 (11:59pm KST)
 
 ---
 
-**문의사항**  
-조교 최재열 (jaychoi@skku.edu)
+## 1. Background: Round-Robin Scheduling
+
+Round Robin (RR) scheduling algorithm is specifically designed for **time-sharing systems**. It is a preemptive version of first-come, first-served scheduling. Processes are dispatched in a **first-in-first-out** sequence, but each process can run for only a limited amount of time. This time interval is known as a **time-slice** or **quantum**.
+
+It is similar to FIFO scheduling but includes **preemption**, enabling the switch between processes.
+
+---
+
+## 2. Basic Requirements for CPU Scheduling
+
+### Parent Process
+
+1. **Child Process Creation**
+   - Create **10 child processes** from the parent process.
+2. **Scheduling Policy**
+
+   - Schedule child processes according to the **Round-Robin scheduling policy**.
+   - Define scheduling parameters such as **time quantum** and **timer tick interval**.
+
+3. **Timer Signal**
+
+   - Periodically receive the **ALARM signal** by registering a timer event (refer to the `setitimer` system call).
+   - The ALARM signal acts as a **periodic timer interrupt** (time tick).
+
+4. **Queues**
+
+   - Maintain the following:
+     - **Run-queue:** Holds child processes in the ready state.
+     - **Wait-queue:** Holds child processes in the waiting state.
+
+5. **Scheduling Execution**
+
+   - Account for the **remaining time quantum** of all child processes.
+   - Allocate a **time slice** to the child process using **IPC messages** (refer to `msgget`, `msgsnd`, and `msgrcv` system calls).
+   - Use the `IPC_NOWAIT` flag for IPC.
+
+6. **Waiting Time**
+   - Account for the **waiting time** of all child processes.
+
+---
+
+### Child Process
+
+1. **Simulating User Processes**
+
+   - Simulate a user process with an infinite loop of **dynamic CPU-burst** and **I/O-burst**.
+   - Begin execution with two parameters: `cpu_burst` and `io_burst`. These values are **randomly generated**.
+
+2. **Receiving Time Slice**
+
+   - When receiving a time slice from the OS via IPC, make progress during the **CPU-burst phase**.
+
+3. **Decreasing CPU-Burst**
+   - On receiving the IPC message, decrease the **CPU-burst** value.
+
+---
+
+## 3. Optional Requirements for I/O Involvement
+
+### Child Process
+
+1. **I/O Requests**
+   - Make **I/O requests** after completing a CPU-burst.
+   - If `CPU-burst` reaches zero:
+     - Send an IPC message to the parent process with the next **I/O-burst** value.
+
+---
+
+### Parent Process
+
+1. **Handling I/O Requests**
+
+   - On receiving an IPC message, move the child process from the **run-queue** to the **wait-queue**.
+
+2. **Managing I/O-Burst**
+
+   - Remember the child’s **I/O-burst** value.
+   - On every time tick:
+     - Decrease the I/O-burst value of all processes in the **wait-queue**.
+
+3. **I/O Completion**
+
+   - When a child process completes I/O:
+     - Move it from the **wait-queue** back to the **run-queue** for scheduling.
+
+4. **Scheduling Events**
+   - Trigger scheduling upon the following events:
+     - Expiry of **time quantum** for a process.
+     - A process completes its **CPU-burst** and makes an **I/O request**.
+
+---
+
+## 4. Program Output: Hard-Copy Report
+
+1. **Output Format**
+
+   - Print scheduling operations in the following format:
+     ```
+     At time t, process pid gets CPU time, remaining CPU-burst.
+     Run-queue dump: ...
+     Wait-queue dump: ...
+     ```
+
+2. **Output File**
+
+   - Write all operations to `schedule_dump.txt`.
+
+3. **Execution Duration**
+
+   - All processes must run for **at least 1 minute**.
+
+4. **Output Period**
+
+   - Print scheduling operations during **0 ~ 10,000 time ticks**.
+
+5. **System Calls and Functions**
+   - Recommended references:
+     - `sprintf`, `open`, `write`, `close`.
+
+---
+
+## Notes
+
+- **Language Recommendation:** C or C++ (but not mandatory).
+- For questions, contact **TA Jaeyeol Choi** (jaychoi@skku.edu).

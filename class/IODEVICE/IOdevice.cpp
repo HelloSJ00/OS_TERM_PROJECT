@@ -1,78 +1,69 @@
 #define TIME_TICK 10000; //10ms
 
-#define IPC_KEY_TO_IODEVICE 3456
-#define IPC_KEY_TO_SCHEDULER 5678
+#define IPC_KEY_TO_USER 1234
+#define CPU_REPORT 0
+#define IO_REPORT 1
+#define CPU_DECREASE 2
+#define IO_DECREASE 3
+#define TERMINATE 4
 
-#include "IOdevice.h"
-#include "IPCMESSAGE/IPCMessage.h"
+#include "./IOdevice.h"
 #include <sys/ipc.h>
 #include <sys/msg.h>
 #include <iostream>
+#include <signal.h>
+#include <sys/time.h>
+#include <unistd.h>
 using namespace std;
 
 // 기본 생성자
-IOdevice::IOdevice() : current_user(nullptr), time_slice(0) {}
+IOdevice::IOdevice() : process(nullptr), time_slice(0) {}
 
 // User 객체를 통해 프로세스를 할당
-void IOdevice::assign_process(User* user, int slice) {
-    current_user = user;
+void IOdevice::assign_process(PCB* cur_process, int slice) {
+    this->process = cur_process;
     time_slice = slice;
-    cout << "IOdevice: Assigning process " << user->pid << " with time slice " << slice << " units.\n";
+    cout << "IOdevice: Assigning process " << process->pid << " with time slice " << slice << " units.\n";
 }
 
 // IO 작업 처리 (tick 메시지 수신)
 void IOdevice::tick() {
-    int msgid_to_iodevice = msgget(IPC_KEY_TO_IODEVICE, 0666 | IPC_CREAT);
-    int msgid_to_scheduler = msgget(IPC_KEY_TO_SCHEDULER, 0666 | IPC_CREAT);
+    if (process == nullptr) return; // 현재 실행 중인 프로세스가 없으면 무시
+    // IPC 메시지 작성
+    int msgid_to_user = msgget(IPC_KEY_TO_USER, 0666 | IPC_CREAT);
 
-    if (msgid_to_iodevice == -1 || msgid_to_scheduler == -1) {
-        perror("msgget");
-        return;
+    IPCMessageToUser msg_to_user;
+    msg_to_user.sender_pid = getpid();
+    msg_to_user.receiver_pid = process->pid;
+
+    if (time_slice == 0) {
+        // 타임 슬라이스 만료 시: RUNQUEUE로 이동
+        msg_to_user.mtype = IO_REPORT;
+        cout << "IOdevice: Sending REPORT command to PID " << process->pid << "\n";
+
+    } else {
+        // 타임 슬라이스 진행 중: DECREASE 명령
+        msg_to_user.mtype = IO_DECREASE;
+        cout << "IOdevice: Sending IO_DECREASE command to PID " << process->pid << "\n";
     }
 
-    IPCMessageToIODevice msg;
-    if (msgrcv(msgid_to_iodevice, &msg, sizeof(msg) - sizeof(long), 1, IPC_NOWAIT) != -1) {
-        if (current_user == nullptr || current_user->pid != msg.pid) {
-            cout << "IOdevice: No matching process for message.\n";
-            return;
-        }
-
-        // IO 버스트 감소
-        current_user->io_burst -= TIME_TICK;
-        if (current_user->io_burst < 0) {
-            current_user->io_burst = 0;
-        }
-
-        cout << "IOdevice: Process " << current_user->pid 
-            << " tick received. io_burst=" << current_user->io_burst << "ms remaining.\n";
-
-        // IO 완료 시 Scheduler로 메시지 전송
-        if (current_user->io_burst == 0) {
-            IPCMessageToScheduler response;
-            response.mtype = 1;
-            response.pid = current_user->pid;
-            response.io_burst = current_user->io_burst;
-            response.io_complete = true;
-
-            if (msgsnd(msgid_to_scheduler, &response, sizeof(response) - sizeof(long), 0) == -1) {
-                perror("msgsnd to scheduler");
-                return;
-            }
-
-            cout << "IOdevice: Sent IO complete message to Scheduler for process " << current_user->pid << ".\n";
-            current_user = nullptr;  // 프로세스 해제
-        }
+    // 메시지 전송
+    if (msgsnd(msgid_to_user, &msg_to_user, sizeof(msg_to_user) - sizeof(long), 0) == -1) {
+        cerr << "IOdevice: Failed to send message to User process " << process->pid << "\n";
     }
+    // 타임 슬라이스 감소
+    time_slice -= TIME_TICK;
+    if (time_slice < 0) time_slice = 0;
 }
 
 // 현재 프로세스를 반환하고 CPU를 비웁니다.
-User* IOdevice::release_process() {
-    User* temp_user = current_user;
-    current_user = nullptr;
-    return temp_user;
+PCB* IOdevice::release_process() {
+    PCB* temp_process = process;
+    process = nullptr;
+    return temp_process;
 }
 
 // CPU가 비어 있는지 확인
 bool IOdevice::is_idle() const {
-    return current_user == nullptr;
+    return process == nullptr;
 }

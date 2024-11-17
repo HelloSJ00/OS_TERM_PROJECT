@@ -1,5 +1,5 @@
-#include "FeedbackQueue.h"
-
+#include "./FeedbackQueue.h"
+using namespace std;
 // 생성자
 FeedbackQueue::FeedbackQueue(int tq) : time_quantum(tq) {}
 
@@ -28,7 +28,7 @@ int FeedbackQueue::getTimeQuantum() const {
 
 // PID로 PCB를 찾는 메서드
 PCB* FeedbackQueue::find_process_by_pid(int pid) {
-    std::queue<PCB*> tempQueue;  // PCB 포인터를 임시 저장할 큐
+    queue<PCB*> tempQueue;  // PCB 포인터를 임시 저장할 큐
     PCB* foundProcess = nullptr;
 
     // 큐에서 프로세스를 찾아 임시 큐에 재배열

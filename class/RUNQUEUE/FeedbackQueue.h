@@ -2,7 +2,7 @@
 #define FEEDBACKQUEUE_H
 
 #include <queue>
-#include "PCB.h"  // PCB 클래스 정의 포함
+#include "../PCB/PCB.h"  // PCB 클래스 정의 포함
 
 class FeedbackQueue {
 private:

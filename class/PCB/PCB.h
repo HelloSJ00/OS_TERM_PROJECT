@@ -2,9 +2,9 @@
 #define PCB_H
 
 #include <sys/types.h>
-#include "User.h" // User 클래스 선언 포함
+#include "../USER/User.h" // User 클래스 선언 포함
 
-enum ProcessState { READY, RUNNING, WAITING, TERMINATED };
+enum ProcessState { READY, RUNNING,IO, WAITING, TERMINATED };
 
 class PCB {
 public:

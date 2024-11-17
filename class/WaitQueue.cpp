@@ -1,4 +1,4 @@
-#include "WaitQueue.h"
+#include "./WaitQueue.h"
 
 // 프로세스를 큐에 추가
 void WaitQueue::enqueue(PCB* process) {
