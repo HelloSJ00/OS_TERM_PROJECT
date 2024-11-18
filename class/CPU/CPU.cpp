@@ -1,12 +1,12 @@
-#define TIME_TICK 10000; //10ms
+#define TIME_TICK 10; //10ms
 
 // IPC 키 설정
 #define IPC_KEY_TO_USER 1234
-#define CPU_REPORT 0
-#define IO_REPORT 1
-#define CPU_DECREASE 2
-#define IO_DECREASE 3
-#define TERMINATE 4
+#define CPU_REPORT 1
+#define IO_REPORT 2
+#define CPU_DECREASE 3
+#define IO_DECREASE 4
+#define TERMINATE 5
 
 #include "./CPU.h"
 #include <sys/ipc.h>
@@ -29,21 +29,28 @@ void CPU::assign_process(PCB* cur_process,int slice){
 }
 
 void CPU::tick() {
+    // cout << "CPU: tick" << endl;
     if (process == nullptr) return; // 현재 실행 중인 프로세스가 없으면 무시
     // IPC 메시지 작성
     int msgid_to_user = msgget(IPC_KEY_TO_USER, 0666 | IPC_CREAT);
 
     IPCMessageToUser msg_to_user;        
     msg_to_user.sender_pid = getpid();
-    msg_to_user.receiver_pid = process->pid;
+    msg_to_user.mtype = process->pid;
 
     if (time_slice == 0) {
         // 타임 슬라이스 만료 시: REPORT 명령
-        msg_to_user.mtype = CPU_REPORT; // REPORT는 #define으로 정의된 정수
+        msg_to_user.type = CPU_REPORT; // REPORT는 #define으로 정의된 정수
         cout << "CPU: Sending REPORT command to PID " << process->pid << "\n";
+        // 프로세스를 CPU에서 해제
+        PCB* temp_process = release_process();
+        if (temp_process) {
+            cout << "CPU: Process " << temp_process->pid << " released from CPU.\n";
+        }
+
     } else {
         // 타임 슬라이스 진행 중: DECREASE 명령
-        msg_to_user.mtype = CPU_DECREASE; // REPORT는 #define으로 정의된 정수
+        msg_to_user.type = CPU_DECREASE; // REPORT는 #define으로 정의된 정수
         cout << "CPU: Sending CPU_DECREASE command to PID " << process->pid << "\n";
     }
 

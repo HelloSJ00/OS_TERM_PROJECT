@@ -5,7 +5,6 @@
 #include "../PCB/PCB.h"
 #include "../CPU/CPU.h"
 #include "../USER/User.h"  // User 클래스 포함
-
 class CPU {
   PCB* process;
   int time_slice;      // 현재 프로세스에 할당된 타임 슬라이스

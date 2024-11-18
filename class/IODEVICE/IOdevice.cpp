@@ -1,11 +1,11 @@
-#define TIME_TICK 10000; //10ms
+#define TIME_TICK 10; //10ms
 
 #define IPC_KEY_TO_USER 1234
-#define CPU_REPORT 0
-#define IO_REPORT 1
-#define CPU_DECREASE 2
-#define IO_DECREASE 3
-#define TERMINATE 4
+#define CPU_REPORT 1
+#define IO_REPORT 2
+#define CPU_DECREASE 3
+#define IO_DECREASE 4
+#define TERMINATE 5
 
 #include "./IOdevice.h"
 #include <sys/ipc.h>
@@ -34,16 +34,16 @@ void IOdevice::tick() {
 
     IPCMessageToUser msg_to_user;
     msg_to_user.sender_pid = getpid();
-    msg_to_user.receiver_pid = process->pid;
+    msg_to_user.mtype = process->pid;
 
     if (time_slice == 0) {
         // 타임 슬라이스 만료 시: RUNQUEUE로 이동
-        msg_to_user.mtype = IO_REPORT;
+        msg_to_user.type = IO_REPORT;
         cout << "IOdevice: Sending REPORT command to PID " << process->pid << "\n";
 
     } else {
         // 타임 슬라이스 진행 중: DECREASE 명령
-        msg_to_user.mtype = IO_DECREASE;
+        msg_to_user.type = IO_DECREASE;
         cout << "IOdevice: Sending IO_DECREASE command to PID " << process->pid << "\n";
     }
 

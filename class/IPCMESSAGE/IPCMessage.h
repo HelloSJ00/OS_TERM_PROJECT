@@ -4,9 +4,9 @@
 #include <sys/types.h>
 // CPU -> User 메시지 구조체
 struct IPCMessageToUser {
-    long mtype;  // 메시지 타입
+    long mtype;  // 메시지를 받을 프로세스의 PID 
     pid_t sender_pid;   // 메시지를 보낸 프로세스의 PID
-    pid_t receiver_pid; // 메시지를 받을 프로세스의 PID
+    int type; // 
 };
 
 // User -> Scheduler 메시지 구조체

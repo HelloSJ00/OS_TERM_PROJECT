@@ -42,19 +42,30 @@ int main(){
             << ", IO Burst = " << io_burst << std::endl;
       User user(getpid(), cpu_burst, io_burst); // User 객체 생성
       user.receiveCommand();                  // 명령 수신 대기
+      cout << "Child Process " << getpid() << " Terminating after receiveCommand.\n";
+
       exit(0);                                // 자식 프로세스 종료
     } else if (pid > 0) { // 부모 프로세스
-        PCB* pcb = new PCB(pid, cpu_burst, io_burst, nullptr); // PCB 생성
+        PCB* pcb = new PCB(pid, cpu_burst, io_burst); // PCB 생성
         scheduler.addProcess(pcb); // FeedbackQueue에 PCB 추가
+        child_pids.push_back(pid); // 자식 PID 저장
+        cout << "Scheduler: add process to queue \n";
+
     } else {
       cerr << "Fork failed.\n";
       return 1;
     }
   }
 
-  // 모든 자식 프로세스가 종료될 때까지 대기
-  for (int i = 0; i < NUM_OF_PROCESSES; i++) {
-    wait(NULL);
+  scheduler.run(); // 부모 프로세스는 스케줄러 실행 루프를 실행
+
+  // 자식 프로세스 종료 대기
+  for (pid_t child_pid : child_pids) {
+      int status;
+      waitpid(child_pid, &status, 0); // 자식 프로세스 종료 확인
+      if (WIFEXITED(status)) {
+          cout << "Child Process PID = " << child_pid << " exited with status " << WEXITSTATUS(status) << ".\n";
+      }
   }
 
   cout << "All child processes have completed.\n";

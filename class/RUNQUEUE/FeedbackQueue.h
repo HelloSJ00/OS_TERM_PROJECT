@@ -27,6 +27,7 @@ public:
 
     // PID로 PCB를 찾는 메서드
     PCB* find_process_by_pid(int pid);
+
 };
 
 #endif // FEEDBACKQUEUE_H

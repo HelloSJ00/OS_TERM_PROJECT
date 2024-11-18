@@ -12,11 +12,11 @@ public:
     int cpu_burst;
     int io_burst;
     int priority;
+    int waitingTime;
     ProcessState state;
-    User* user;  // User 객체에 대한 포인터
 
-    PCB(int p, int cpu, int io, User* u)
-        : pid(p), cpu_burst(cpu), io_burst(io), priority(0), state(READY), user(u) {}
+    PCB(int p, int cpu, int io)
+        : pid(p), cpu_burst(cpu), io_burst(io), priority(0),waitingTime(0), state(READY) {}
 };
 
 #endif
