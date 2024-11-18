@@ -8,20 +8,12 @@
 
 ## 실행
 
-| **Action**           | **Details**                                                       |
-| -------------------- | ----------------------------------------------------------------- |
-| **Clone Repository** | `git clone <repository-url>`                                      |
-| **Environment**      | - **Operating System:** macOS<br>- **Editor:** Visual Studio Code |
-| **Compilation**      | ```bash                                                           |
-|                      | g++ -std=c++17 -arch arm64 -o main main.cpp \                     |
-|                      | ./class/RUNQUEUE/FeedbackQueue.cpp \                              |
-|                      | ./class/CPU/CPU.cpp \                                             |
-|                      | ./class/IODEVICE/IOdevice.cpp \                                   |
-|                      | ./class/SCHEDULER/Scheduler.cpp \                                 |
-|                      | ./class/USER/User.cpp \                                           |
-|                      | ./class/WAITQUEUE/WaitQueue.cpp                                   |
-|                      | ```                                                               |
-| **Execution**        | `bash ./main`                                                     |
+| **Action**           | **Details**                                                                                                                                                                                                              |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Clone Repository** | `git clone <repository-url>`                                                                                                                                                                                             |
+| **환경**             | - **Operating System:** macOS<br>- **Editor:** Visual Studio Code                                                                                                                                                        |
+| **컴파일 명령어**    | `g++ -std=c++17 -arch arm64 -o main main.cpp ./class/RUNQUEUE/FeedbackQueue.cpp ./class/CPU/CPU.cpp ./class/IODEVICE/IOdevice.cpp ./class/SCHEDULER/Scheduler.cpp ./class/USER/User.cpp ./class/WAITQUEUE/WaitQueue.cpp` |
+| **실행**             | `./main`                                                                                                                                                                                                                 |
 
 ---
 
