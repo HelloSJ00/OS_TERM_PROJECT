@@ -15,11 +15,12 @@
 #include <signal.h>
 #include <sys/time.h>
 #include <unistd.h>
+#include <fstream>  // 파일 출력을 위한 헤더 추가
 using namespace std;
 Scheduler* Scheduler::global_scheduler = nullptr; 
 // 생성자
 Scheduler::Scheduler(vector<FeedbackQueue*> feedbackQueues, WaitQueue* waitQueue, CPU* cpu, IOdevice* ioDevice)
-    : feedbackQueues(feedbackQueues), waitQueue(waitQueue), cpu(cpu), ioDevice(ioDevice) {
+    : feedbackQueues(feedbackQueues), waitQueue(waitQueue), cpu(cpu), ioDevice(ioDevice) ,time(0) {
     global_scheduler = this; // 현재 Scheduler 객체를 전역으로 설정
     start_timer();
 }
@@ -123,6 +124,7 @@ void Scheduler::start_timer() {
 }
 
 void Scheduler::tick() {
+    time += 10;
     cpu->tick();
     ioDevice->tick();
     
@@ -139,6 +141,7 @@ void Scheduler::tick() {
             if (process) {
                 process->cpu_burst = msg_from_user.cpu_burst;
                 process->io_burst = msg_from_user.io_burst;
+                process->waitingTime = 0;
                 // 남은 CPU와 IO Burst 출력
                 cout << "Scheduler: PID " << process->pid 
                     << " | Remaining CPU Burst: " << process->cpu_burst 
@@ -165,6 +168,7 @@ void Scheduler::tick() {
             if (process) {
                 process->cpu_burst = msg_from_user.cpu_burst;
                 process->io_burst = msg_from_user.io_burst;
+                process->waitingTime = 0;
                 // 남은 CPU와 IO Burst 출력
                 cout << "Scheduler: PID " << process->pid 
                     << " | Remaining CPU Burst: " << process->cpu_burst 
@@ -269,6 +273,15 @@ void Scheduler::handleIOReport(const IPCMessageToScheduler& msg) {
 }
 
 void Scheduler::aging() {
+    string folder_path = "./dump";
+
+    // 폴더가 존재하지 않으면 생성
+    if (!filesystem::exists(folder_path)) {
+        filesystem::create_directories(folder_path);
+    }
+
+    // aging_dump.txt 파일 경로
+    string file_path = folder_path + "/aging_dump.txt";
     for (int i = 1; i < feedbackQueues.size(); ++i) { // 최상위 큐(0번)는 Aging 처리하지 않음
         FeedbackQueue* currentQueue = feedbackQueues[i];
         queue<PCB*> tempQueue; // 임시 큐로 대기열을 재구성
@@ -284,8 +297,21 @@ void Scheduler::aging() {
                 process->waitingTime = 0; // 대기 시간 초기화
                 int next_level = i - 1;  // 한 단계 높은 우선순위 큐
                 feedbackQueues[next_level]->enqueue(process);
-                cout << "Scheduler: Process " << process->pid 
-                    << " aged to FeedbackQueue " << next_level << "\n";
+                // 콘솔 출력
+                cout << "(At time " << this->time << ", process " 
+                    << process->pid << " aged from FeedbackQueue " 
+                    << i << " to FeedbackQueue " << next_level << ")\n";
+
+                // aging_dump.txt에 기록
+                ofstream out(file_path, std::ios::app); // Append mode
+                if (out.is_open()) {
+                    out << "At time " << time << "ms, process " 
+                        << process->pid << " aged from FeedbackQueue " 
+                        << i << " to FeedbackQueue " << next_level << ".\n";
+                    out.close();
+                } else {
+                    cerr << "Error: Unable to open or create " << file_path << ".\n";
+                }
             } else {
                 tempQueue.push(process); // 대기 시간이 부족하면 그대로 유지
             }

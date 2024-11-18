@@ -18,6 +18,7 @@ private:
     IOdevice* ioDevice;                   // IO 장치 (포인터)
     vector<PCB*> allPCBs;                 // 모든 PCB를 보관하는 벡터
     static Scheduler* global_scheduler;           // Singleton-like 인스턴스 포인터
+    int time;
 
     void terminateProcess(PCB* process);
     void runQueueEnqueue(PCB* process);
@@ -36,7 +37,7 @@ public:
     Scheduler(vector<FeedbackQueue*> feedbackQueues, WaitQueue* waitQueue, CPU* cpu, IOdevice* ioDevice);
     void addProcess(PCB* process);
     void tick();
-    void aging();
+    void aging(); // 에이징 기법
     void run(); // 실행 루프 추가
 
 };

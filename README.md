@@ -2,6 +2,29 @@
 
 **Prof. Eun-Seok Ryu**
 
+# 객체지향적으로 만들어본 Multiple Feedback Queue Scheduler
+
+---
+
+## 실행
+
+| **Action**           | **Details**                                                       |
+| -------------------- | ----------------------------------------------------------------- |
+| **Clone Repository** | `git clone <repository-url>`                                      |
+| **Environment**      | - **Operating System:** macOS<br>- **Editor:** Visual Studio Code |
+| **Compilation**      | ```bash                                                           |
+|                      | g++ -std=c++17 -arch arm64 -o main main.cpp \                     |
+|                      | ./class/RUNQUEUE/FeedbackQueue.cpp \                              |
+|                      | ./class/CPU/CPU.cpp \                                             |
+|                      | ./class/IODEVICE/IOdevice.cpp \                                   |
+|                      | ./class/SCHEDULER/Scheduler.cpp \                                 |
+|                      | ./class/USER/User.cpp \                                           |
+|                      | ./class/WAITQUEUE/WaitQueue.cpp                                   |
+|                      | ```                                                               |
+| **Execution**        | `bash ./main`                                                     |
+
+---
+
 ## Project 1: Simple Scheduling
 
 ### Programming Assignment #1

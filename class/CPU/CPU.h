@@ -8,6 +8,7 @@
 class CPU {
   PCB* process;
   int time_slice;      // 현재 프로세스에 할당된 타임 슬라이스
+  int time;
 
 public:
   // 기본 생성자
